@@ -22,12 +22,12 @@ message_t msg;  // we use this instance to fill it with up to date data.
 
 void countRg1Drops ()
 {
-    if (digitalRead(RG11_1_Pin) == LOW) {
-        digitalWrite(debugging_Pin, LOW);
+    if (digitalRead(RG11_1_Pin) == HIGH) {
+        digitalWrite(debugging_Pin, HIGH);
         dropStartTime = micros();
     }
     else {
-        digitalWrite(debugging_Pin, HIGH);
+        digitalWrite(debugging_Pin, LOW);
         dropPulseLength += micros() - dropStartTime;
         dropCounter++;
     }
