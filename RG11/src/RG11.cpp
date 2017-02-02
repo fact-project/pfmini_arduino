@@ -31,7 +31,6 @@ void countDrops ()
 EthernetServer server(80);
 message_t msg;
 
-
 void setup() {
     Ethernet.begin(mac, ip);
     server.begin();
@@ -45,8 +44,6 @@ void setup() {
 
     wdt_enable(WDTO_8S);
 }
-
-
 
 /* Check if a client connected via ethernet and requested a status message
  *  if so:
