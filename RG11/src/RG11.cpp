@@ -91,10 +91,9 @@ void ethernet_communication() {
     }
 }
 
-unsigned long time_of_last_message_update = 0;
-
 void loop() {
     unsigned long current_millis = millis();
+    static unsigned long time_of_last_message_update = 0;
 
     if (current_millis - time_of_last_message_update > time_between_message_updates_in_ms)
     {
