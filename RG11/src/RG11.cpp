@@ -13,12 +13,12 @@ IPAddress ip(10, 0, 100, 155);
 volatile unsigned long dropCounter;
 volatile unsigned long dropPulseLength;
 volatile unsigned long dropStartTime = 0;
-const int RG11_1_Pin = 3;
+const int RG11_Pin = 3;
 const unsigned long time_between_message_updates_in_ms = 10UL*1000UL;
 
-void countRg1Drops ()
+void countDrops ()
 {
-    if (digitalRead(RG11_1_Pin) == HIGH) {
+    if (digitalRead(RG11_Pin) == HIGH) {
         dropStartTime = micros();
     }
     else {
@@ -35,10 +35,10 @@ void setup() {
     Ethernet.begin(mac, ip);
     server.begin();
 
-    pinMode(RG11_1_Pin, INPUT);
+    pinMode(RG11_Pin, INPUT);
     attachInterrupt(
-        digitalPinToInterrupt(RG11_1_Pin),
-        countRg1Drops,
+        digitalPinToInterrupt(RG11_Pin),
+        countDrops,
         CHANGE
     );
 
