@@ -16,18 +16,19 @@ def request(host, port=80):
     s.close()
     return data
 
-while True:
-    try:
-        msg = struct.unpack("IIIH", request('10.0.100.155'))
-        report = Report(
-            dropCounter=msg[0],
-            pulse_length_in_ms=msg[1] / 1e3,  # 1e3 convert us to ms.
-            time=msg[2] / 1e3,  # 1e3 convert ms to seconds.
-            checksum=msg[3]
-        )
+if __name__ == "__main__":
+    while True:
+        try:
+            msg = struct.unpack("IIIH", request('10.0.100.155'))
+            report = Report(
+                dropCounter=msg[0],
+                pulse_length_in_ms=msg[1] / 1e3,  # 1e3 convert us to ms.
+                time=msg[2] / 1e3,  # 1e3 convert ms to seconds.
+                checksum=msg[3]
+            )
 
-        print(time.asctime(), report)
-    except Exception as e:
-        print(time.asctime(), e)
+            print(time.asctime(), report)
+        except Exception as e:
+            print(time.asctime(), e)
 
-    time.sleep(1)
+        time.sleep(1)
