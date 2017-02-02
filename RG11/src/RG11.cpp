@@ -12,12 +12,13 @@ IPAddress ip(10, 0, 100, 155);
 
 volatile unsigned long dropCounter;
 volatile unsigned long dropPulseLength;
-volatile unsigned long dropStartTime = 0;
+
 const int RG11_Pin = 3;
 const unsigned long time_between_message_updates_in_ms = 10UL*1000UL;
 
 void countDrops ()
 {
+    static unsigned long dropStartTime = 0;
     if (digitalRead(RG11_Pin) == HIGH) {
         dropStartTime = micros();
     }
