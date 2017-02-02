@@ -1,3 +1,4 @@
+#include <util/atomic.h>
 #include <avr/wdt.h>
 #include <SPI.h>
 #include <Ethernet.h>
@@ -6,18 +7,14 @@
 #include "checksum_fletcher16.h"
 #include "RG11.h"
 
-const int RG11_1_Pin = 3;
-
 byte mac[] = {0x02, 0xFA, 0xC7, 0x00, 0x00, 0x10};
 IPAddress ip(10, 0, 100, 155);
 
 volatile unsigned long dropCounter;
 volatile unsigned long dropPulseLength;
 volatile unsigned long dropStartTime = 0;
-
-EthernetServer server(80);
-message_t msg;  // we use this instance to fill it with up to date data.
-
+const int RG11_1_Pin = 3;
+const unsigned long time_between_message_updates_in_ms = 10UL*1000UL;
 
 void countRg1Drops ()
 {
@@ -30,36 +27,43 @@ void countRg1Drops ()
     }
 }
 
+EthernetServer server(80);
+message_t msg;
+
+
 void setup() {
     Ethernet.begin(mac, ip);
     server.begin();
 
     pinMode(RG11_1_Pin, INPUT);
+    attachInterrupt(
+        digitalPinToInterrupt(RG11_1_Pin),
+        countRg1Drops,
+        CHANGE
+    );
 
-    attachInterrupt(digitalPinToInterrupt(RG11_1_Pin), countRg1Drops, CHANGE);
-
-    //wdt_enable(WDTO_8S);
-    Serial.begin(115200);
-
-    Serial.print("server is at ");
-    Serial.println(Ethernet.localIP());
+    wdt_enable(WDTO_8S);
 }
 
-unsigned long current_millis;
-unsigned long time_of_last_message = 0;
 
-/* Check if a client connected via ethernet:
+
+/* Check if a client connected via ethernet and requested a status message
  *  if so:
  *    - send out one status message
  *    - reset the watchdog timer
+ *    - close connection to signal end of message
  *
  *  Note: If watchdog timer is not reset within 8sec
  *        The watchdog will reset the MCU.
  *        So in case of network issues, which make it impossible to
  *        have a client connecting to us, there is a chance for this MCU reset
  *        to nicely reset the wiznet chip and allow a client to connect again.
+ *
+ *  Note: in order to request a status message, any valid HTTP request is okay
+ *        any valid HTTP request ends in a "double enter" == "\n\n"
+ *        so we just look for a "\n\n" in order to send a status message.
 */
-void ethernet_comminucation() {
+void ethernet_communication() {
 
     EthernetClient client = server.available();
     if (client) {
@@ -84,36 +88,31 @@ void ethernet_comminucation() {
         delay(1);
         client.stop();
     }
-
 }
 
-void loop() {
-    current_millis = millis();
+unsigned long time_of_last_message_update = 0;
 
-    if (time_of_last_message - current_millis > 1000){
+void loop() {
+    unsigned long current_millis = millis();
+
+    if (current_millis - time_of_last_message_update > time_between_message_updates_in_ms)
+    {
         msg.payload.current_millis = current_millis;
-        //noInterrupts();
-        msg.payload.dropCounter = dropCounter;
-        msg.payload.dropPulseLength = dropPulseLength;
-        //interrupts();
+
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+        {
+            msg.payload.dropCounter = dropCounter;
+            msg.payload.dropPulseLength = dropPulseLength;
+            dropCounter = 0;
+            dropPulseLength = 0;
+        }
+
         msg.checksum = checksum_fletcher16(
             (byte *)&(msg.payload),
             sizeof(message_payload_t)
         );
-        time_of_last_message = current_millis;
-        Serial.print("millis:");
-        Serial.println(msg.payload.current_millis);
-
-        Serial.print("dropCounter:");
-        Serial.println(msg.payload.dropCounter);
-
-        Serial.print("dropPulseLength:");
-        Serial.println(msg.payload.dropPulseLength);
-        dropCounter = 0;
-        dropPulseLength = 0;
-
+        time_of_last_message_update = current_millis;
     }
 
-    ethernet_comminucation();
-    delay(2500); // TODO: get rid of this line, its just here during debugging so Serial.print does not flood us.
+    ethernet_communication();
 }
