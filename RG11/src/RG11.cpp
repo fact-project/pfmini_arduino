@@ -14,17 +14,46 @@ volatile unsigned long dropCounter;
 volatile unsigned long dropPulseLength;
 
 const int RG11_Pin = 3;
-const unsigned long time_between_message_updates_in_ms = 10UL*1000UL;
+const unsigned long time_between_message_updates_in_ms = 1UL*1000UL;
+
+/* The relais pin needs to be 'debounced', i.e. for a single pulse
+ * one sees several tiny pulses in quick succession on the relais pin within
+ * few microseconds. In this circuit, I only see this on the rising edge of
+ * the actual pulse.
+ * A typical "rain drop pulse" from the RG11 is hundreds of milliseconds long
+ * and the only variation I see is in multiples of 100ms.
+ *
+ * In order to get rid of these tiny bouncing pulses, I debounce like this:
+ *   - the first rising edge counts, i.e. starts the stopwatch
+ *   - a falling edge only counts, if the rising edge is more than 5ms ago.
+ *
+ * the 5ms is defined by the constant named: minimal_pulse_length_in_us below.
+*/
+const unsigned long minimal_pulse_length_in_us = 5000UL;
 
 void countDrops ()
 {
     static unsigned long dropStartTime = 0;
-    if (digitalRead(RG11_Pin) == HIGH) {
-        dropStartTime = micros();
+    static bool inside_a_pulse = false;
+    static unsigned long this_pulse_length = 0;
+
+    if (digitalRead(RG11_Pin) == HIGH) {  // rising edge
+        // the first rising edge may start a pulse.
+        if (!inside_a_pulse) {
+            dropStartTime = micros();
+            inside_a_pulse = true;
+            this_pulse_length = 0;
+        }
     }
-    else {
-        dropPulseLength += micros() - dropStartTime;
-        dropCounter++;
+    else {  // falling edge
+        this_pulse_length = micros() - dropStartTime;
+        // only pulses longer than 5ms == 5000 us can end a pulse.
+        if (inside_a_pulse && this_pulse_length > minimal_pulse_length_in_us)
+        {
+            inside_a_pulse = false;
+            dropCounter++;
+            dropPulseLength += this_pulse_length;
+        }
     }
 }
 
