@@ -32,60 +32,83 @@ const unsigned long time_between_message_updates_in_ms = 1UL*1000UL;
  *   - the first rising edge counts, i.e. starts the stopwatch
  *   - a falling edge only counts, if the rising edge is more than 5ms ago.
  *
- * the 5ms is defined by the constant named: minimal_pulse_length_in_us below.
+ * the 5ms is defined by the constant named: debounce_time below.
 */
-const unsigned long minimal_pulse_length_in_us = 5000UL;
+const unsigned long debounce_time = 5000UL;
+
 
 void drop_counter_pulse_ISR ()
 {
-    static unsigned long dropStartTime = 0;
+    static unsigned long time_of_last_valid_transition = 0;
     static bool inside_a_pulse = false;
-    static unsigned long this_pulse_length = 0;
 
-    if (digitalRead(drop_counter_pin) == LOW) {
-        // the first edge may start a pulse.
-        if (!inside_a_pulse) {
-            dropStartTime = micros();
-            inside_a_pulse = true;
-            this_pulse_length = 0;
-        }
-    }
-    else {
-        this_pulse_length = micros() - dropStartTime;
-        // only pulses longer than 5ms == 5000 us can end a pulse.
-        if (inside_a_pulse && this_pulse_length > minimal_pulse_length_in_us)
-        {
-            inside_a_pulse = false;
-            drop_counter_number_of_pulses++;
-            drop_counter_pulse_length += this_pulse_length;
-        }
+    unsigned long duration_of_current_phase = micros() - time_of_last_valid_transition;
+    // ignore everything, which happens too fast after a transition
+    if (duration_of_current_phase < debounce_time)
+        return;
+
+    byte pin_state = digitalRead(drop_counter_pin);
+
+    // ignore a falling edge, if we are already in a pulse
+    // ignore a rising edge, if we are outside of a pulse
+    // the binary x-or thing below is a shorter form of
+    // these two if clauses.
+    /*
+    if (pin_state == LOW && inside_a_pulse)
+        return;
+
+    if (pin_state == HIGH && !inside_a_pulse)
+        return;
+    */
+    if (pin_state ^ inside_a_pulse)
+        return;
+
+    // We arrived here, so this is a valid transition.
+    time_of_last_valid_transition = micros();
+    inside_a_pulse = !inside_a_pulse;
+
+    if (pin_state == HIGH)
+    {
+        drop_counter_number_of_pulses++;
+        drop_counter_pulse_length += duration_of_current_phase;
     }
 }
 
 
 void condensation_detector_pulse_ISR ()
 {
-    static unsigned long dropStartTime = 0;
+    static unsigned long time_of_last_valid_transition = 0;
     static bool inside_a_pulse = false;
-    static unsigned long this_pulse_length = 0;
 
-    if (digitalRead(condensation_detector_pin) == LOW) {
-        // the first edge may start a pulse.
-        if (!inside_a_pulse) {
-            dropStartTime = micros();
-            inside_a_pulse = true;
-            this_pulse_length = 0;
-        }
-    }
-    else {
-        this_pulse_length = micros() - dropStartTime;
-        // only pulses longer than 5ms == 5000 us can end a pulse.
-        if (inside_a_pulse && this_pulse_length > minimal_pulse_length_in_us)
-        {
-            inside_a_pulse = false;
-            condensation_detector_number_of_pulses++;
-            condensation_detector_pulse_length += this_pulse_length;
-        }
+    unsigned long duration_of_current_phase = micros() - time_of_last_valid_transition;
+    // ignore everything, which happens too fast after a transition
+    if (duration_of_current_phase < debounce_time)
+        return;
+
+    byte pin_state = digitalRead(condensation_detector_pin);
+
+    // ignore a falling edge, if we are already in a pulse
+    // ignore a rising edge, if we are outside of a pulse
+    // the binary x-or thing below is a shorter form of
+    // these two if clauses.
+    /*
+    if (pin_state == LOW && inside_a_pulse)
+        return;
+
+    if (pin_state == HIGH && !inside_a_pulse)
+        return;
+    */
+    if (pin_state ^ inside_a_pulse)
+        return;
+
+    // We arrived here, so this is a valid transition.
+    time_of_last_valid_transition = micros();
+    inside_a_pulse = !inside_a_pulse;
+
+    if (pin_state == HIGH)
+    {
+        condensation_detector_number_of_pulses++;
+        condensation_detector_pulse_length += duration_of_current_phase;
     }
 }
 
