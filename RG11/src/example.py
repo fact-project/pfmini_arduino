@@ -2,7 +2,6 @@ import socket
 import time
 import struct
 from collections import namedtuple
-
 Report = namedtuple('Report',
     ['drop_counter_number_of_pulses',
     'drop_counter_pulse_length',
@@ -27,8 +26,15 @@ def request(host, port=80):
 if __name__ == "__main__":
     while True:
         try:
-            msg = struct.unpack("IIIIIIH", request('192.168.0.110'))
-            report = Report(*msg[:6])
+            msg = struct.unpack("IIIIIIH", request('10.0.100.155'))
+            report = Report(
+                msg[0],
+                msg[1] / (msg[0]*1000) if msg[0] else '-',
+                msg[2],
+                msg[3] / (msg[2]*1000) if msg[2] else '-',
+                msg[4],
+                msg[5],
+            )
 
             print(time.asctime(), report)
         except Exception as e:
