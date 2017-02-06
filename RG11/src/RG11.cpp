@@ -10,10 +10,15 @@
 byte mac[] = {0x02, 0xFA, 0xC7, 0x00, 0x00, 0x10};
 IPAddress ip(10, 0, 100, 155);
 
-volatile unsigned long dropCounter;
-volatile unsigned long dropPulseLength;
 
-const int RG11_Pin = 3;
+const int condensation_detector_pin = 2;
+volatile unsigned long condensation_detector_number_of_pulses;
+volatile unsigned long condensation_detector_pulse_length;
+
+const int drop_counter_pin = 3;
+volatile unsigned long drop_counter_number_of_pulses;
+volatile unsigned long drop_counter_pulse_length;
+
 const unsigned long time_between_message_updates_in_ms = 1UL*1000UL;
 
 /* The relais pin needs to be 'debounced', i.e. for a single pulse
@@ -31,28 +36,55 @@ const unsigned long time_between_message_updates_in_ms = 1UL*1000UL;
 */
 const unsigned long minimal_pulse_length_in_us = 5000UL;
 
-void countDrops ()
+void drop_counter_pulse_ISR ()
 {
     static unsigned long dropStartTime = 0;
     static bool inside_a_pulse = false;
     static unsigned long this_pulse_length = 0;
 
-    if (digitalRead(RG11_Pin) == HIGH) {  // rising edge
-        // the first rising edge may start a pulse.
+    if (digitalRead(drop_counter_pin) == LOW) {
+        // the first edge may start a pulse.
         if (!inside_a_pulse) {
             dropStartTime = micros();
             inside_a_pulse = true;
             this_pulse_length = 0;
         }
     }
-    else {  // falling edge
+    else {
         this_pulse_length = micros() - dropStartTime;
         // only pulses longer than 5ms == 5000 us can end a pulse.
         if (inside_a_pulse && this_pulse_length > minimal_pulse_length_in_us)
         {
             inside_a_pulse = false;
-            dropCounter++;
-            dropPulseLength += this_pulse_length;
+            drop_counter_number_of_pulses++;
+            drop_counter_pulse_length += this_pulse_length;
+        }
+    }
+}
+
+
+void condensation_detector_pulse_ISR ()
+{
+    static unsigned long dropStartTime = 0;
+    static bool inside_a_pulse = false;
+    static unsigned long this_pulse_length = 0;
+
+    if (digitalRead(condensation_detector_pin) == LOW) {
+        // the first edge may start a pulse.
+        if (!inside_a_pulse) {
+            dropStartTime = micros();
+            inside_a_pulse = true;
+            this_pulse_length = 0;
+        }
+    }
+    else {
+        this_pulse_length = micros() - dropStartTime;
+        // only pulses longer than 5ms == 5000 us can end a pulse.
+        if (inside_a_pulse && this_pulse_length > minimal_pulse_length_in_us)
+        {
+            inside_a_pulse = false;
+            condensation_detector_number_of_pulses++;
+            condensation_detector_pulse_length += this_pulse_length;
         }
     }
 }
@@ -64,10 +96,16 @@ void setup() {
     Ethernet.begin(mac, ip);
     server.begin();
 
-    pinMode(RG11_Pin, INPUT);
+    pinMode(drop_counter_pin, INPUT);
     attachInterrupt(
-        digitalPinToInterrupt(RG11_Pin),
-        countDrops,
+        digitalPinToInterrupt(drop_counter_pin),
+        drop_counter_pulse_ISR,
+        CHANGE
+    );
+
+    attachInterrupt(
+        digitalPinToInterrupt(condensation_detector_pin),
+        condensation_detector_pulse_ISR,
         CHANGE
     );
 
@@ -123,14 +161,21 @@ void loop() {
 
     if (current_millis - time_of_last_message_update > time_between_message_updates_in_ms)
     {
-        msg.payload.current_millis = current_millis;
+        msg.payload.time_since_boot_in_ms = current_millis;
 
         ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
         {
-            msg.payload.dropCounter = dropCounter;
-            msg.payload.dropPulseLength = dropPulseLength;
-            dropCounter = 0;
-            dropPulseLength = 0;
+            msg.payload.drop_counter.number_of_pulses = drop_counter_number_of_pulses;
+            msg.payload.drop_counter.pulse_length = drop_counter_pulse_length;
+            msg.payload.condensation_detector.number_of_pulses = condensation_detector_number_of_pulses;
+            msg.payload.condensation_detector.pulse_length = condensation_detector_pulse_length;
+
+            msg.payload.time_between_message_updates_in_ms = time_between_message_updates_in_ms;
+
+            drop_counter_number_of_pulses = 0;
+            drop_counter_pulse_length = 0;
+            condensation_detector_number_of_pulses = 0;
+            condensation_detector_pulse_length = 0;
         }
 
         msg.checksum = checksum_fletcher16(
